@@ -1,0 +1,1137 @@
+openapi: 3.0.3
+info:
+  title: Flowora API
+  description: |
+    Flowora ("Think. Draw. Connect.") — browser-based diagramming workspace.
+    MVP ships only the health endpoint and diagrams CRUD (in-memory repository);
+    folders, templates, share, versions, and server-side export are Phase 2.
+    The web app is local-first and makes no backend calls in MVP.
+    See docs/API_SPEC.md for the full written specification.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Local development
+  - url: https://api.flowora.app/api/v1
+    description: Production (Phase 2)
+tags:
+  - name: Health
+    description: Liveness check (MVP).
+  - name: Diagrams
+    description: Diagram CRUD (MVP in-memory; Phase 2 Postgres).
+  - name: Folders
+    description: Folder organisation (Phase 2).
+  - name: Templates
+    description: Diagram templates (Phase 2).
+  - name: Sharing
+    description: Diagram sharing (Phase 2).
+  - name: Versions
+    description: Diagram version history (Phase 2).
+  - name: Export
+    description: Server-side export jobs (Phase 2).
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /diagrams:
+    get:
+      tags: [Diagrams]
+      summary: List my diagrams
+      operationId: listDiagrams
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/DiagramType'
+        - name: folderId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated diagram list (items omit content).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagramListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Diagrams]
+      summary: Create a diagram
+      operationId: createDiagram
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDiagramRequest'
+      responses:
+        '201':
+          description: Diagram created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /diagrams/{id}:
+    get:
+      tags: [Diagrams]
+      summary: Get one diagram (full document)
+      operationId: getDiagram
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      responses:
+        '200':
+          description: Diagram with full content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Diagrams]
+      summary: Replace a diagram document (full replace)
+      operationId: replaceDiagram
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+        - name: If-Match
+          in: header
+          description: Expected current version for optimistic locking.
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceDiagramRequest'
+      responses:
+        '200':
+          description: Diagram updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/VersionConflict'
+    patch:
+      tags: [Diagrams]
+      summary: Update diagram metadata (name, folderId)
+      operationId: updateDiagramMeta
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDiagramMetaRequest'
+      responses:
+        '200':
+          description: Diagram metadata updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Diagrams]
+      summary: Delete a diagram (owner only)
+      operationId: deleteDiagram
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      responses:
+        '204':
+          description: Diagram deleted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/duplicate:
+    post:
+      tags: [Diagrams]
+      summary: Duplicate a diagram
+      operationId: duplicateDiagram
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      responses:
+        '201':
+          description: New duplicated diagram.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/share:
+    get:
+      tags: [Sharing]
+      summary: List shares for a diagram (Phase 2)
+      operationId: listShares
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      responses:
+        '200':
+          description: Share list.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Share'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Sharing]
+      summary: Grant access to a diagram (Phase 2, owner only)
+      operationId: grantShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantShareRequest'
+      responses:
+        '201':
+          description: Share granted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '200':
+          description: Existing share updated (upsert).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Share'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/share/{userId}:
+    delete:
+      tags: [Sharing]
+      summary: Revoke access to a diagram (Phase 2, owner only)
+      operationId: revokeShare
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Share revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/versions:
+    get:
+      tags: [Versions]
+      summary: List version history, newest first (Phase 2)
+      operationId: listVersions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/PageSizeParam'
+      responses:
+        '200':
+          description: Paginated version list (items omit content).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/versions/{version}:
+    get:
+      tags: [Versions]
+      summary: Get one version snapshot (Phase 2)
+      operationId: getVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Version snapshot with full content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiagramVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/versions/{version}/restore:
+    post:
+      tags: [Versions]
+      summary: Restore a version snapshot (Phase 2)
+      operationId: restoreVersion
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Diagram restored to the snapshot; version bumped.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Diagram'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /diagrams/{id}/export:
+    post:
+      tags: [Export]
+      summary: Start a server-side export job (Phase 2)
+      operationId: startExport
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DiagramIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportJobRequest'
+      responses:
+        '202':
+          description: Export job queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /exports/{jobId}:
+    get:
+      tags: [Export]
+      summary: Poll an export job (Phase 2)
+      operationId: getExportJob
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /folders:
+    get:
+      tags: [Folders]
+      summary: List my folders (Phase 2)
+      operationId: listFolders
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Flat folder list; clients build the tree from parentId.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Folder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Folders]
+      summary: Create a folder (Phase 2)
+      operationId: createFolder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+      responses:
+        '201':
+          description: Folder created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /folders/{id}:
+    get:
+      tags: [Folders]
+      summary: Get one folder (Phase 2)
+      operationId: getFolder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FolderIdParam'
+      responses:
+        '200':
+          description: Folder.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Folders]
+      summary: Rename or reparent a folder (Phase 2)
+      operationId: updateFolder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FolderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFolderRequest'
+      responses:
+        '200':
+          description: Folder updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Folders]
+      summary: Delete a folder (Phase 2)
+      operationId: deleteFolder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FolderIdParam'
+      responses:
+        '204':
+          description: Folder deleted; its diagrams move to root.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /templates:
+    get:
+      tags: [Templates]
+      summary: List templates (Phase 2)
+      operationId: listTemplates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/DiagramType'
+        - name: builtin
+          in: query
+          description: Filter to seeded built-in templates.
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Template list (items include content).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Template'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /templates/{id}:
+    get:
+      tags: [Templates]
+      summary: Get one template (Phase 2)
+      operationId: getTemplate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template with content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Phase 2 JWT access token. Not used by the MVP web app.
+  parameters:
+    DiagramIdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FolderIdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeParam:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    ValidationError:
+      description: Request failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Missing, expired, or invalid access token.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Authenticated but not allowed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Resource does not exist or is not visible to the caller.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    VersionConflict:
+      description: If-Match version does not match the stored version.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    RateLimited:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          example: ok
+        version:
+          type: string
+          example: 1.0.0
+        uptimeSeconds:
+          type: number
+          example: 1234
+    DiagramType:
+      type: string
+      enum: [HLD, LLD, ERD, FLOWCHART, UML, SEQUENCE, NETWORK, CLOUD, DFD, BPMN, OTHER]
+    Viewport:
+      type: object
+      required: [zoom, x, 'y']
+      properties:
+        zoom:
+          type: number
+          example: 1
+        x:
+          type: number
+          example: 0
+        'y':
+          type: number
+          example: 0
+    FloworaNode:
+      type: object
+      required: [id, type, position, data]
+      properties:
+        id:
+          type: string
+          example: n1
+        type:
+          type: string
+          example: service
+        position:
+          type: object
+          required: [x, 'y']
+          properties:
+            x:
+              type: number
+            'y':
+              type: number
+        data:
+          type: object
+          required: [label]
+          properties:
+            label:
+              type: string
+              example: API Gateway
+        width:
+          type: number
+        height:
+          type: number
+        style:
+          type: object
+          additionalProperties: true
+    FloworaEdge:
+      type: object
+      required: [id, source, target]
+      properties:
+        id:
+          type: string
+          example: e1
+        source:
+          type: string
+          example: n1
+        target:
+          type: string
+          example: n2
+        type:
+          type: string
+          enum: [straight, smoothstep, bezier]
+          default: smoothstep
+        label:
+          type: string
+          example: HTTPS
+        markerEnd:
+          type: string
+          example: arrow
+        animated:
+          type: boolean
+          default: false
+    FloworaDocument:
+      type: object
+      description: Flowora JSON v1 document (see packages/shared zod schemas).
+      required: [id, name, type, schemaVersion, version, viewport, nodes, edges, metadata]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Payment Architecture
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        schemaVersion:
+          type: integer
+          example: 1
+        version:
+          type: integer
+          example: 1
+        viewport:
+          $ref: '#/components/schemas/Viewport'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FloworaNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/FloworaEdge'
+        metadata:
+          type: object
+          required: [createdAt, updatedAt]
+          properties:
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    Diagram:
+      type: object
+      required: [id, ownerId, name, type, schemaVersion, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        templateId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          example: Payment Architecture
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        schemaVersion:
+          type: integer
+          example: 1
+        version:
+          type: integer
+          example: 3
+        content:
+          $ref: '#/components/schemas/FloworaDocument'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DiagramMeta:
+      type: object
+      description: Diagram list item (content omitted).
+      required: [id, ownerId, name, type, schemaVersion, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        templateId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        schemaVersion:
+          type: integer
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PaginationMeta:
+      type: object
+      required: [page, pageSize, total, totalPages]
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+    DiagramListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiagramMeta'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    CreateDiagramRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        templateId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          $ref: '#/components/schemas/FloworaDocument'
+    ReplaceDiagramRequest:
+      type: object
+      required: [name, type, content]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+        content:
+          $ref: '#/components/schemas/FloworaDocument'
+    UpdateDiagramMetaRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        folderId:
+          type: string
+          format: uuid
+          nullable: true
+    Folder:
+      type: object
+      required: [id, ownerId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+          example: System Design
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateFolderRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+    UpdateFolderRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+    Template:
+      type: object
+      required: [id, name, type, content, isBuiltin, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: HLD Payment Architecture
+        type:
+          $ref: '#/components/schemas/DiagramType'
+        description:
+          type: string
+          nullable: true
+        content:
+          $ref: '#/components/schemas/FloworaDocument'
+        isBuiltin:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Share:
+      type: object
+      required: [id, diagramId, grantedTo, grantedBy, permission, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        diagramId:
+          type: string
+          format: uuid
+        grantedTo:
+          type: string
+          format: uuid
+        grantedBy:
+          type: string
+          format: uuid
+        permission:
+          type: string
+          enum: [viewer, editor]
+        createdAt:
+          type: string
+          format: date-time
+    GrantShareRequest:
+      type: object
+      required: [userId, permission]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        permission:
+          type: string
+          enum: [viewer, editor]
+    DiagramVersion:
+      type: object
+      required: [id, diagramId, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        diagramId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        content:
+          $ref: '#/components/schemas/FloworaDocument'
+        createdBy:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+    VersionListResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiagramVersion'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    ExportJobRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [png, svg, pdf]
+        scale:
+          type: integer
+          enum: [1, 2]
+          default: 1
+        pageSize:
+          type: string
+          enum: [A4, A3]
+          default: A4
+        orientation:
+          type: string
+          enum: [portrait, landscape]
+          default: landscape
+    ExportJob:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [queued, processing, done, failed]
+        downloadUrl:
+          type: string
+          format: uri
+          nullable: true
+        error:
+          type: string
+          nullable: true
+    ErrorDetail:
+      type: object
+      properties:
+        path:
+          type: string
+        message:
+          type: string
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                $ref: '#/components/schemas/ErrorDetail'
