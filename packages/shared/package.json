@@ -1,0 +1,27 @@
+{
+  "description": "Flowora shared schema — zod-validated Flowora JSON v1 document format.",
+  "devDependencies": {
+    "typescript": "~5.7.3",
+    "vitest": "^3.0.0"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "name": "@flowora/shared",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "types": "./dist/index.d.ts",
+  "version": "0.1.0"
+}

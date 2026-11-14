@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/* Base layout: the editor is a full-height app shell. */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+/* Export capture: hide connection handles and selection rings so exported
+   images show only the diagram itself. */
+.exporting .react-flow__handle {
+  display: none !important;
+}
+
+.exporting .flowora-node-selected {
+  box-shadow: none !important;
+}
+
+/* Print: only the rendered diagram image is visible. */
+#print-area {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+
+  #root {
+    display: none !important;
+  }
+
+  #print-area {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+  }
+
+  #print-area img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+}

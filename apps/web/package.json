@@ -1,0 +1,35 @@
+{
+  "dependencies": {
+    "@flowora/shared": "*",
+    "@xyflow/react": "^12.9.0",
+    "html-to-image": "^1.11.11",
+    "idb": "^8.0.3",
+    "jspdf": "^3.0.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.7.0",
+    "zod": "^3.25.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tailwindcss": "^4.1.0",
+    "typescript": "~5.7.3",
+    "vite": "^8.3.6",
+    "vitest": "^3.0.0"
+  },
+  "name": "@flowora/web",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}
